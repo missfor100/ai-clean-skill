@@ -1,0 +1,4 @@
+{
+  "name": "ai-clean",
+  "description": "Auto-strip AI generation marks from MiMo-produced files (AIGC/C2PA metadata, corner watermarks, Office/PDF tool fingerprints)"
+}
