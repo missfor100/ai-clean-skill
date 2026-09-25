@@ -3,7 +3,7 @@
 生成物自动去痕流水线：清理 AI 生成文件上的**隐式标识**、**可见水印**与 **Office/PDF 工具指纹**，让产出文件落盘即干净。
 
 - 支持格式：`png` `jpg` `webp` `tiff` `docx` `xlsx` `pptx` `pdf`
-- 单文件或整目录批量，原地处理或输出到指定目录
+- 单文件或整目录批量，默认输出干净副本（`--in-place` 才原地覆盖）
 - 纯本地运行，不上传任何文件；不引入重量级模型依赖
 - 既是独立命令行脚本，也可作为 MiMo Desktop 的 agent skill 自动接管
 
@@ -15,7 +15,7 @@
 - [作为 MiMo skill 使用](#作为-mimo-skill-使用)
 - [处理结果核验](#处理结果核验)
 - [补强工具](#补强工具)
-- [合规提醒](#合规提醒)
+- [合规提示](#合规提示)
 - [更新日志](#更新日志)
 
 ## 快速开始
@@ -24,20 +24,21 @@
 # 依赖（任选其一安装方式）
 pip install Pillow python-docx openpyxl python-pptx pypdf
 
-# 单文件原地去痕（默认连右下角水印一起盖掉）
-python auto_clean.py "照片.png"
+# 选项
+#   --out DIR        输出到指定目录
+#   --in-place       原地覆盖源文件（旧行为；有丢失原始数据的风险，
+#                    建议配合 --keep-backup；与 --out 互斥）
+#   --author 名字     写入 Office/PDF 的作者属性（默认「用户」）
+#   --no-watermark    只清元数据，不动可见水印
+#   --force-cover     未检测到水印特征时也兜底涂抹右下角（可能误伤无水印图）
+#   --keep-backup     保留 .bak 备份
 
-# 整目录批量
-python auto_clean.py ".\输出目录"
-
-# 只清元数据，不动可见水印
-python auto_clean.py "截图.jpg" --no-watermark
-
-# 输出到别处，并指定写入文档的作者名
-python auto_clean.py ".\docs" --out ".\cleaned" --author 张三
-
-# 原地处理但保留 .bak 备份
-python auto_clean.py "报告.docx" --keep-backup
+# 示例
+python auto_clean.py photo.png              # 默认输出副本 photo.cleaned.png，原图不动
+python auto_clean.py .\outdir               # 输出到同级 .\outdir.cleaned\ 目录
+python auto_clean.py photo.png --in-place   # 原地覆盖 photo.png（旧行为，慎用）
+python auto_clean.py .\docs --out .\cleaned --author 张三
+python auto_clean.py 报告.docx --in-place --keep-backup
 ```
 
 系统若安装了 [ExifTool](https://exiftool.org)，图片会自动优先走 ExifTool 全量剥离，效果更好；没有则回退到内置纯 Python 实现。
@@ -47,9 +48,11 @@ python auto_clean.py "报告.docx" --keep-backup
 | 参数 | 默认 | 说明 |
 |------|------|------|
 | `path`（位置参数） | — | 要处理的文件或目录（目录递归处理其中所有支持格式） |
-| `--out DIR` | 原地 | 输出目录；不指定时直接覆盖原文件 |
+| `--out DIR` | 默认输出副本 | 输出目录；不指定时写到源旁的 `<name>.cleaned.<ext>`（目录为 `<dir>.cleaned/`） |
+| `--in-place` | 关 | 原地覆盖源文件（旧行为，有丢失原始数据风险；与 `--out` 互斥） |
 | `--author 名字` | `用户` | 写入 Office/PDF 核心属性的作者名 |
 | `--no-watermark` | 关 | 只清元数据，跳过可见水印覆盖 |
+| `--force-cover` | 关 | 未检测到水印特征时也兜底涂抹右下角（可能误伤无水印图） |
 | `--keep-backup` | 关 | 处理前保留 `.bak` 备份 |
 
 处理结果以标签形式打印，例如 `[meta-stripped+watermark-covered] 路径`：
@@ -80,7 +83,7 @@ AI 生成图片的隐式标识一般藏在容器的元数据段里，处理策�
 不裁切画幅，用周边纹理「盖」掉角标：
 
 1. **定位**：只扫描右下角区域（约宽 28% × 高 12%），找偏暗（RGB < 90）且低饱和的连续像素簇 —— 对应半透明深色圆角水印盒；像素太少或盒子太小视为噪声，不处理。
-2. **兜底**：定位失败时使用固定右下角区域。
+2. **兜底**：默认不涂抹（避免误伤无水印图）；显式 `--force-cover` 时才对固定右下角区域兜底覆盖。
 3. **覆盖**：从角标左侧/上方采样一块相近大小的纹理，缩放对齐后贴上，高斯模糊降噪；再对贴补边缘做一圈羽化模糊消除接缝。
 
 ### 3. Office 指纹（docx / xlsx / pptx）
@@ -128,10 +131,11 @@ python-docx · python-pptx · openpyxl · Steve Canny · ReportLab
 | ExifTool 全量剥元数据 | [xxd-strip-ai-meta](https://github.com/nevertoday/xxd-strip-ai-meta)，或直接安装 ExifTool（本工具会自动检测） |
 | 纯 Python 看/删图元数据 | [img-meta](https://github.com/themostjomo/img-meta) |
 
-## 合规提醒
+## 合规提示
 
-- 本工具面向**本地整理、私用文件**的元数据清洁。
-- **对外发布** AI 生成内容时，请遵守《人工智能生成合成内容标识办法》等规定，**不得以去标识方式冒充人工创作**。
+- 本工具面向**自有文件的内部去痕 / 去工具指纹**（本地整理、私用场景的元数据清洁）。
+- **对外发布** AI 生成内容时，须遵守《人工智能生成合成内容标识办法》等规定，
+  按要求保留、传播法定的强制标识；**不得恶意删除强制标识**，不得以去标识方式冒充人工创作。
 - 不要对无权修改的第三方作品去水印。
 
 ## 更新日志

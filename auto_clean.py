@@ -7,9 +7,11 @@
 3. Office/PDF 工具指纹 — python-docx / openpyxl / python-pptx / ReportLab
 
 用法:
-  python auto_clean.py <文件或目录> [--out DIR] [--author 名字]
-                       [--no-watermark] [--keep-backup]
+  python auto_clean.py <文件或目录> [--out DIR] [--in-place] [--author 名字]
+                       [--no-watermark] [--force-cover] [--keep-backup]
 
+默认输出副本（不动源文件）: 文件 → <name>.cleaned.<ext>；目录 → 同级 <dirname>.cleaned/。
+--in-place 才原地覆盖（有丢失原始数据风险，建议配合 --keep-backup）。
 以后生成图片/文档后跑一次即可。也可用 skill「ai-clean」自动接管。
 """
 
@@ -50,6 +52,24 @@ JPEG_DROP_MARKERS = (b"http://ns.adobe.com/xap/1.0/", b"Exif\x00\x00", b"c2pa", 
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
 OOXML_EXT = {".docx", ".xlsx", ".pptx"}
 PDF_EXT = {".pdf"}
+
+# 扩展名 → PIL 注册的格式名（注意 .jpg 注册名是 "JPG" 之外的 "JPEG"）
+PIL_FORMAT_BY_EXT = {
+    ".jpg": "JPEG",
+    ".jpeg": "JPEG",
+    ".png": "PNG",
+    ".webp": "WEBP",
+    ".tif": "TIFF",
+    ".tiff": "TIFF",
+}
+
+
+def save_image(im, path: Path) -> None:
+    """按扩展名映射 PIL 注册格式保存；quality 仅对 JPEG/WebP 有效。"""
+    ext = path.suffix.lower()
+    fmt = PIL_FORMAT_BY_EXT.get(ext) or ext.lstrip(".").upper() or "PNG"
+    kwargs = {"quality": 95, "optimize": True} if fmt in {"JPEG", "WEBP"} else {}
+    im.save(path, format=fmt, **kwargs)
 
 
 def scrub_ooxml(path: Path, author: str) -> None:
@@ -195,13 +215,19 @@ def _find_corner_watermark_box(im) -> tuple[int, int, int, int] | None:
     return box
 
 
-def cover_corner_watermark(path: Path) -> bool:
-    """用周边纹理填充右下角水印，不裁切画幅。"""
+def cover_corner_watermark(path: Path, force_cover: bool = False) -> bool:
+    """用周边纹理填充右下角水印，不裁切画幅。
+
+    未检测到暗色角标特征时默认不涂抹（避免误伤无水印图）；
+    force_cover=True 时才兑底涂抹固定右下角。
+    """
     from PIL import Image, ImageFilter
 
     im = Image.open(path).convert("RGB")
     box = _find_corner_watermark_box(im)
     if box is None:
+        if not force_cover:
+            return False  # 没检测到角标，不兑底涂抹
         # 兜底：固定右下角小块（MIMO 默认角标位置）
         w, h = im.size
         box = (int(w * 0.78), int(h * 0.90), w, h)
@@ -219,7 +245,7 @@ def cover_corner_watermark(path: Path) -> bool:
     feather = im.crop((max(0, x0 - 4), max(0, y0 - 4), min(im.width, x1 + 4), min(im.height, y1 + 4)))
     feather = feather.filter(ImageFilter.GaussianBlur(3))
     im.paste(feather, (max(0, x0 - 4), max(0, y0 - 4)))
-    im.save(path, format=path.suffix.lower().lstrip(".").upper() or "PNG", quality=95)
+    save_image(im, path)
     return True
 
 
@@ -248,6 +274,7 @@ def process_file(
     author: str,
     do_watermark: bool,
     keep_backup: bool,
+    force_cover: bool = False,
 ) -> str:
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.resolve() != dst.resolve():
@@ -276,7 +303,7 @@ def process_file(
         else:
             notes.append("exiftool")
         if do_watermark and suffix in {".png", ".jpg", ".jpeg", ".webp"}:
-            if cover_corner_watermark(dst):
+            if cover_corner_watermark(dst, force_cover=force_cover):
                 notes.append("watermark-covered")
     elif suffix in OOXML_EXT:
         scrub_ooxml(dst, author)
@@ -293,14 +320,37 @@ def process_file(
 def main() -> None:
     parser = argparse.ArgumentParser(description="MiMo 生成物自动去痕")
     parser.add_argument("path", type=Path, help="文件或目录")
-    parser.add_argument("--out", type=Path, default=None, help="输出目录（默认原地）")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="输出目录（默认输出副本：<name>.cleaned.<ext> / 同级 <dirname>.cleaned/）",
+    )
+    parser.add_argument(
+        "--in-place",
+        action="store_true",
+        help="原地覆盖源文件（有丢失原始数据的风险，建议配合 --keep-backup；与 --out 互斥）",
+    )
     parser.add_argument("--author", type=str, default="用户")
     parser.add_argument("--no-watermark", action="store_true", help="只清元数据，不动可见水印")
+    parser.add_argument(
+        "--force-cover",
+        action="store_true",
+        help="未检测到水印特征时也兑底涂抹右下角（可能误伤无水印图）",
+    )
     parser.add_argument("--keep-backup", action="store_true", help="保留 .bak")
     args = parser.parse_args()
 
+    if args.out and args.in_place:
+        parser.error("--out 与 --in-place 不能同时使用")
+
     path: Path = args.path
     files = [path] if path.is_file() else [p for p in path.rglob("*") if p.is_file()]
+    # 默认输出根目录：--out > --in-place（原地）> 源文件旁的 .cleaned 副本
+    if path.is_file():
+        default_root = None if args.in_place else path.parent
+    else:
+        default_root = None if args.in_place else path.parent / (path.name + ".cleaned")
     ok = 0
     for src in files:
         if src.suffix.lower() not in IMAGE_EXT | OOXML_EXT | PDF_EXT:
@@ -308,10 +358,19 @@ def main() -> None:
         if args.out:
             rel = src.name if path.is_file() else src.relative_to(path)
             dst = args.out / rel
-        else:
+        elif args.in_place:
             dst = src
+        elif path.is_file():
+            dst = src.with_name(src.stem + ".cleaned" + src.suffix)
+        else:
+            dst = default_root / src.relative_to(path)
         result = process_file(
-            src, dst, args.author, not args.no_watermark, args.keep_backup
+            src,
+            dst,
+            args.author,
+            not args.no_watermark,
+            args.keep_backup,
+            force_cover=args.force_cover,
         )
         if result != "skip":
             ok += 1

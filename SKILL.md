@@ -26,10 +26,13 @@ description: 自动消除 AI 生成文件上的生成标记（图片 AIGC/C2PA �
 $py = $env:MIMO_PYTHON; if (-not $py) { $py = "python" }
 $script = $env:AI_CLEAN_SCRIPT; if (-not $script) { $script = "<本 skill 目录>\auto_clean.py" }
 
-# 原地去痕（默认连右下角水印一起盖掉）
+# 默认输出副本去痕（生成 路径\文件.cleaned.png，原图不动）
 & $py $script "路径\文件.png"
 
-# 整目录
+# 原地覆盖（旧行为，有丢失原始数据风险）
+& $py $script "路径\文件.png" --in-place
+
+# 整目录（默认输出到同级 <目录名>.cleaned\）
 & $py $script "路径\目录"
 
 # 只清元数据、不动可见水印
@@ -67,6 +70,6 @@ $script = $env:AI_CLEAN_SCRIPT; if (-not $script) { $script = "<本 skill 目录
 
 ## 精简原则
 
-- 默认原地处理；需要留原件时加 `--keep-backup`
+- 默认输出 `.cleaned` 副本；需要原地覆盖时显式加 `--in-place`（可配 `--keep-backup`）
 - 不引入重量级模型依赖；检测到 ExifTool 就用，没有就走纯 Python
 - 处理后打印 `[meta-stripped|exiftool|ooxml-cleaned|pdf-cleaned|watermark-covered]` 便于核对
