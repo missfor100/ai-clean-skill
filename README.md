@@ -21,8 +21,8 @@
 ## 快速开始
 
 ```powershell
-# 依赖（任选其一安装方式）
-pip install Pillow python-docx openpyxl python-pptx pypdf
+# 依赖（Python 3.10+）
+pip install -r requirements.txt
 
 # 选项
 #   --out DIR        输出到指定目录
@@ -42,6 +42,8 @@ python auto_clean.py 报告.docx --in-place --keep-backup
 ```
 
 系统若安装了 [ExifTool](https://exiftool.org)，图片会自动优先走 ExifTool 全量剥离，效果更好；没有则回退到内置纯 Python 实现。
+
+> **JPEG 注意**：内置 JPEG 路径为**有损重编码**（质量 95），对画质敏感的场景建议先自行保留原图，或安装 ExifTool 走不重编码的剥离路径。
 
 ## 命令行参数
 
@@ -64,6 +66,7 @@ python auto_clean.py 报告.docx --in-place --keep-backup
 | `ooxml-cleaned` | Office 文件已清指纹 |
 | `pdf-cleaned` | PDF 已重写元数据 |
 | `watermark-covered` | 右下角水印已覆盖 |
+| `no-watermark-detected` | 未检出右下角角标，未做涂抹（需人工确认） |
 
 ## 工作原理
 
@@ -74,7 +77,7 @@ python auto_clean.py 报告.docx --in-place --keep-backup
 AI 生成图片的隐式标识一般藏在容器的元数据段里，处理策略按格式分：
 
 - **PNG**：手工解析文件块（chunk），保留像素与必要结构，直接丢弃所有文本/元数据块 —— `tEXt`、`zTXt`、`iTXt`（含 XMP 与国标 AIGC 标识）、`eXIf`。
-- **JPEG**：用 Pillow 解码后仅重编码 RGB 像素（质量 95），APP1 里的 XMP / EXIF / C2PA 段随重编码自然丢弃。
+- **JPEG**：用 Pillow 解码后仅重编码 RGB 像素（**有损**，质量 95），APP1 里的 XMP / EXIF / C2PA 段随重编码自然丢弃；ICC 色彩配置会保留。
 - **WebP / TIFF**：同样重编码丢弃元数据。
 - **有 ExifTool 时**：直接 `exiftool -all=` 全量剥离，优先于以上路径。
 
@@ -85,6 +88,17 @@ AI 生成图片的隐式标识一般藏在容器的元数据段里，处理策�
 1. **定位**：只扫描右下角区域（约宽 28% × 高 12%），找偏暗（RGB < 90）且低饱和的连续像素簇 —— 对应半透明深色圆角水印盒；像素太少或盒子太小视为噪声，不处理。
 2. **兜底**：默认不涂抹（避免误伤无水印图）；显式 `--force-cover` 时才对固定右下角区域兜底覆盖。
 3. **覆盖**：从角标左侧/上方采样一块相近大小的纹理，缩放对齐后贴上，高斯模糊降噪；再对贴补边缘做一圈羽化模糊消除接缝。
+
+**支持矩阵**：
+
+| 场景 | 行为 |
+|------|------|
+| 右下角深色低饱和角标（MiMo 默认样式） | 自动定位并覆盖，标签 `watermark-covered` |
+| 无角标（干净图） | 不涂抹，标签 `no-watermark-detected` |
+| 浅色/白色半透明角标 | **检不到**，标签 `no-watermark-detected` |
+| 左下角、顶部等非右下角位置的水印 | **检不到**，标签 `no-watermark-detected` |
+
+未检出时工具**明确输出** `no-watermark-detected` 而不是假装处理成功——此时需人工确认，或用 `--force-cover` 对右下角兜底涂抹（可能误伤无水印图）。浅色及非右下角水印建议用 [OpenNoMark](#补强工具) 补强。
 
 ### 3. Office 指纹（docx / xlsx / pptx）
 

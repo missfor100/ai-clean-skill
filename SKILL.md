@@ -72,4 +72,4 @@ $script = $env:AI_CLEAN_SCRIPT; if (-not $script) { $script = "<本 skill 目录
 
 - 默认输出 `.cleaned` 副本；需要原地覆盖时显式加 `--in-place`（可配 `--keep-backup`）
 - 不引入重量级模型依赖；检测到 ExifTool 就用，没有就走纯 Python
-- 处理后打印 `[meta-stripped|exiftool|ooxml-cleaned|pdf-cleaned|watermark-covered]` 便于核对
+- 处理后打印 `[meta-stripped|exiftool|ooxml-cleaned|pdf-cleaned|watermark-covered|no-watermark-detected]` 便于核对；看到 `no-watermark-detected` 说明未检出角标，需人工确认右下角是否还有水印

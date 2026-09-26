@@ -69,6 +69,9 @@ def save_image(im, path: Path) -> None:
     ext = path.suffix.lower()
     fmt = PIL_FORMAT_BY_EXT.get(ext) or ext.lstrip(".").upper() or "PNG"
     kwargs = {"quality": 95, "optimize": True} if fmt in {"JPEG", "WEBP"} else {}
+    icc = im.info.get("icc_profile")
+    if icc:
+        kwargs["icc_profile"] = icc
     im.save(path, format=fmt, **kwargs)
 
 
@@ -108,7 +111,8 @@ def scrub_ooxml(path: Path, author: str) -> None:
     ) as zout:
         for item in zin.infolist():
             data = zin.read(item.filename)
-            if item.filename.endswith(".xml"):
+            # 只清洗属性文件：替换表含裸词（AIGC 等），扫正文会改写用户内容
+            if item.filename.startswith("docProps/") and item.filename.endswith(".xml"):
                 text = data.decode("utf-8", errors="replace")
                 for old, new in REPLACEMENTS:
                     text = text.replace(old, new)
@@ -170,10 +174,11 @@ def strip_jpeg_meta(path: Path) -> None:
     from PIL import Image
 
     im = Image.open(path)
-    # 重编码像素，丢弃全部 info/exif
+    icc = im.info.get("icc_profile")
+    # 重编码像素，丢弃全部 info/exif；ICC 色彩配置单独保留
     rgb = im.convert("RGB")
     tmp = path.with_suffix(path.suffix + ".tmp.jpg")
-    rgb.save(tmp, format="JPEG", quality=95, optimize=True)
+    rgb.save(tmp, format="JPEG", quality=95, optimize=True, icc_profile=icc)
     tmp.replace(path)
 
 
@@ -305,6 +310,9 @@ def process_file(
         if do_watermark and suffix in {".png", ".jpg", ".jpeg", ".webp"}:
             if cover_corner_watermark(dst, force_cover=force_cover):
                 notes.append("watermark-covered")
+            else:
+                # 未检出角标：明确告知，提醒人工确认（而非静默跳过）
+                notes.append("no-watermark-detected")
     elif suffix in OOXML_EXT:
         scrub_ooxml(dst, author)
         notes.append("ooxml-cleaned")

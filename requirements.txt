@@ -1,0 +1,6 @@
+# ai-clean 运行依赖（Python 3.10+）
+Pillow
+python-docx
+openpyxl
+python-pptx
+pypdf

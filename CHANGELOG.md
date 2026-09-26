@@ -2,6 +2,19 @@
 
 本项目的版本变更记录。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### 新增
+
+- **依赖清单（#1）**：新增 `requirements.txt`（运行依赖）与 `requirements-dev.txt`（测试依赖），README 安装段改为 `pip install -r requirements.txt`，声明 Python 3.10+。
+- **测试套件与 CI（#2）**：`tests/` 覆盖 PNG/JPEG 元数据剥离、水印定位与覆盖、OOXML/PDF 指纹清理、CLI 副本行为共 14 项测试；新增 GitHub Actions `test` workflow（pytest），与 gitleaks 并列。
+- **水印未检出提示（#4）**：未检出角标时输出 `no-watermark-detected` 标签，不再静默跳过；README 增加水印支持矩阵，SKILL 核验说明同步更新。
+
+### 修复
+
+- **OOXML 清洗范围限定（#3）**：`REPLACEMENTS` 与 AIGC 标记清理现在只作用于 `docProps/*.xml` 属性文件，不再改写 `word/document.xml`、`ppt/slides/`、`xl/worksheets/` 等正文——修复正文含「AIGC」「Steve Canny」等词被误改写的问题。
+- **JPEG 重编码保留 ICC（#5）**：`strip_jpeg_meta` 与 `save_image` 保留 ICC 色彩配置；README 明确标注内置 JPEG 路径为有损重编码（质量 95）并给出画质敏感场景的建议。
+
 ## [1.0.0] - 2026-09-25
 
 首次公开发布。
@@ -16,4 +29,5 @@
 - **MiMo skill 定义**（`SKILL.md` + `locales/`）：生成图片/文档后自动触发去痕，强制关键词扫描核验，命中归零才算完成。
 - **合规说明**：README 与 skill 内均写明本地整理用途与《人工智能生成合成内容标识办法》发布义务。
 
+[未发布]: https://github.com/missfor100/ai-clean-skill/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/missfor100/ai-clean-skill/releases/tag/v1.0.0
