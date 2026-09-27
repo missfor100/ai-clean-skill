@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Copyright 2026 missfor100
+# SPDX-License-Identifier: Apache-2.0
 """MiMo 生成物自动去痕流水线。
 
 处理三类印记:

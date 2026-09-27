@@ -15,6 +15,10 @@
 - **OOXML 清洗范围限定（#3）**：`REPLACEMENTS` 与 AIGC 标记清理现在只作用于 `docProps/*.xml` 属性文件，不再改写 `word/document.xml`、`ppt/slides/`、`xl/worksheets/` 等正文——修复正文含「AIGC」「Steve Canny」等词被误改写的问题。
 - **JPEG 重编码保留 ICC（#5）**：`strip_jpeg_meta` 与 `save_image` 保留 ICC 色彩配置；README 明确标注内置 JPEG 路径为有损重编码（质量 95）并给出画质敏感场景的建议。
 
+### 变更
+
+- **许可证由 MIT 变更为 Apache-2.0**：`LICENSE` 替换为 Apache-2.0 官方全文，新增 `NOTICE` 版权声明与源码文件 `SPDX-License-Identifier: Apache-2.0` 头部标记，README 增加许可证章节。
+
 ## [1.0.0] - 2026-09-25
 
 首次公开发布。

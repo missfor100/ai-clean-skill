@@ -1,3 +1,5 @@
+# Copyright 2026 missfor100
+# SPDX-License-Identifier: Apache-2.0
 """ai-clean 测试套件。
 
 覆盖四条流水线：PNG/JPEG 元数据剥离、右下角水印覆盖、OOXML/PDF 指纹清理，
